@@ -117,6 +117,36 @@
             background: #ff4444;
         }
         
+        .admin-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(150, 100, 255, 0.1);
+            border: 1px solid rgba(150, 100, 255, 0.3);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            margin-top: 12px;
+            margin-left: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .admin-toggle:hover {
+            background: rgba(150, 100, 255, 0.2);
+            transform: scale(1.05);
+        }
+        
+        .admin-toggle.active {
+            background: rgba(150, 100, 255, 0.3);
+            border-color: rgba(150, 100, 255, 0.5);
+        }
+        
+        .admin-icon {
+            width: 12px;
+            height: 12px;
+        }
+        
         .grid {
             display: grid;
             grid-template-columns: 450px 1fr;
@@ -519,6 +549,12 @@
             color: #4ade80;
         }
         
+        .alert-warning {
+            background: rgba(255, 200, 0, 0.1);
+            border: 1px solid rgba(255, 200, 0, 0.3);
+            color: #ffc800;
+        }
+        
         .time-info {
             font-size: 0.8rem;
             color: #888;
@@ -570,6 +606,10 @@
             animation: slideInFromTop 0.3s ease-out;
         }
         
+        .modal-content.admin-mode {
+            border-color: rgba(150, 100, 255, 0.5);
+        }
+        
         .modal-header {
             display: flex;
             justify-content: space-between;
@@ -581,6 +621,10 @@
             font-family: 'Exo 2', sans-serif;
             font-size: 1.3rem;
             color: #ff6b00;
+        }
+        
+        .modal-header.admin-mode h3 {
+            color: #9664ff;
         }
         
         .modal-close {
@@ -611,6 +655,25 @@
             color: #aaa;
             margin-bottom: 16px;
             line-height: 1.5;
+        }
+        
+        .admin-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 20px 0;
+            color: #666;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        
+        .admin-divider::before,
+        .admin-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(150, 100, 255, 0.3);
         }
         
         .modal-buttons {
@@ -652,6 +715,16 @@
             transform: translateY(-2px);
             box-shadow: 0 4px 16px rgba(255, 68, 68, 0.4);
         }
+        
+        .modal-btn-admin {
+            background: linear-gradient(135deg, #9664ff 0%, #b794ff 100%);
+            color: #fff;
+        }
+        
+        .modal-btn-admin:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(150, 100, 255, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -659,9 +732,19 @@
         <div class="header">
             <h1>3D PRINTER QUEUE</h1>
             <p>Makerspace Reservation System</p>
-            <div class="status-indicator">
-                <div class="status-dot" id="statusDot"></div>
-                <span id="statusText">Connecting...</span>
+            <div style="margin-top: 12px;">
+                <div class="status-indicator">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusText">Connecting...</span>
+                </div>
+                <div class="admin-toggle" id="adminToggle" onclick="toggleAdminMode()">
+                    <svg class="admin-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    <span id="adminToggleText">Admin Mode</span>
+                </div>
             </div>
         </div>
         
@@ -670,6 +753,11 @@
             <h3>⚠️ Firebase Setup Required</h3>
             <p>Please configure Firebase to enable shared real-time updates.</p>
             <p style="font-size: 0.85rem; margin-top: 8px;">See FIREBASE_SETUP.md for instructions</p>
+        </div>
+        
+        <!-- Admin Mode Notice -->
+        <div class="alert alert-warning" id="adminAlert" style="display: none;">
+            <strong>🔓 Admin Mode Active</strong> - You can force cancel any booking with the admin PIN.
         </div>
         
         <div class="grid">
@@ -788,15 +876,15 @@
     
     <!-- PIN Verification Modal -->
     <div class="modal" id="pinModal">
-        <div class="modal-content">
-            <div class="modal-header">
+        <div class="modal-content" id="modalContent">
+            <div class="modal-header" id="modalHeader">
                 <h3>🔐 Enter PIN to Cancel</h3>
                 <button class="modal-close" onclick="closePinModal()">×</button>
             </div>
             <div class="modal-body">
                 <p id="modalBookingInfo"></p>
                 <div class="form-group">
-                    <label>Enter Your 4-Digit PIN</label>
+                    <label id="pinLabel">Enter Your 4-Digit PIN</label>
                     <div class="input-wrapper">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -805,10 +893,24 @@
                         <input type="password" id="pinVerifyInput" placeholder="••••" maxlength="4" pattern="[0-9]{4}">
                     </div>
                 </div>
+                
+                <div class="admin-divider" id="adminDivider" style="display: none;">or use Admin PIN</div>
+                
+                <div class="form-group" id="adminPinGroup" style="display: none;">
+                    <label>Admin PIN (Force Cancel)</label>
+                    <div class="input-wrapper">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                            <path d="M2 17l10 5 10-5"/>
+                            <path d="M2 12l10 5 10-5"/>
+                        </svg>
+                        <input type="password" id="adminPinInput" placeholder="••••••" maxlength="6" pattern="[0-9]{6}">
+                    </div>
+                </div>
             </div>
             <div class="modal-buttons">
                 <button class="modal-btn modal-btn-cancel" onclick="closePinModal()">Cancel</button>
-                <button class="modal-btn modal-btn-confirm" onclick="verifyAndDelete()">Confirm Delete</button>
+                <button class="modal-btn modal-btn-confirm" id="confirmBtn" onclick="verifyAndDelete()">Confirm Delete</button>
             </div>
         </div>
     </div>
@@ -828,6 +930,9 @@ const firebaseConfig = {
   appId: "1:814480140784:web:1c85171efa01cbced4d535",
   measurementId: "G-VLBZZYWR12"
 };
+        
+        // ⚠️ SET YOUR ADMIN PIN HERE (6 digits recommended)
+        const ADMIN_PIN = "11022044";  // Change this to your desired admin PIN!
 
         // Check if Firebase is configured
         const isConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
@@ -858,8 +963,27 @@ const firebaseConfig = {
         let currentUserType = 'student';
         let allReservations = [];
         let currentDeleteId = null;
+        let isAdminMode = false;
         
-        // Simple hash function for PIN (basic security)
+        // Toggle admin mode
+        window.toggleAdminMode = function() {
+            isAdminMode = !isAdminMode;
+            const toggle = document.getElementById('adminToggle');
+            const toggleText = document.getElementById('adminToggleText');
+            const adminAlert = document.getElementById('adminAlert');
+            
+            if (isAdminMode) {
+                toggle.classList.add('active');
+                toggleText.textContent = 'Admin Mode ON';
+                adminAlert.style.display = 'block';
+            } else {
+                toggle.classList.remove('active');
+                toggleText.textContent = 'Admin Mode';
+                adminAlert.style.display = 'none';
+            }
+        };
+        
+        // Simple hash function for PIN
         function hashPin(pin) {
             let hash = 0;
             for (let i = 0; i < pin.length; i++) {
@@ -1041,9 +1165,37 @@ const firebaseConfig = {
         // Open PIN modal
         window.openPinModal = function(id, name, partName) {
             currentDeleteId = id;
+            const modalContent = document.getElementById('modalContent');
+            const modalHeader = document.getElementById('modalHeader');
+            const confirmBtn = document.getElementById('confirmBtn');
+            const adminDivider = document.getElementById('adminDivider');
+            const adminPinGroup = document.getElementById('adminPinGroup');
+            
             document.getElementById('modalBookingInfo').textContent = 
                 `Cancel booking for "${partName}" by ${name}?`;
             document.getElementById('pinVerifyInput').value = '';
+            document.getElementById('adminPinInput').value = '';
+            
+            if (isAdminMode) {
+                modalContent.classList.add('admin-mode');
+                modalHeader.classList.add('admin-mode');
+                modalHeader.querySelector('h3').textContent = '🔓 Admin Override';
+                confirmBtn.classList.remove('modal-btn-confirm');
+                confirmBtn.classList.add('modal-btn-admin');
+                adminDivider.style.display = 'flex';
+                adminPinGroup.style.display = 'block';
+                document.getElementById('pinLabel').textContent = 'User PIN (if you know it)';
+            } else {
+                modalContent.classList.remove('admin-mode');
+                modalHeader.classList.remove('admin-mode');
+                modalHeader.querySelector('h3').textContent = '🔐 Enter PIN to Cancel';
+                confirmBtn.classList.remove('modal-btn-admin');
+                confirmBtn.classList.add('modal-btn-confirm');
+                adminDivider.style.display = 'none';
+                adminPinGroup.style.display = 'none';
+                document.getElementById('pinLabel').textContent = 'Enter Your 4-Digit PIN';
+            }
+            
             document.getElementById('pinModal').classList.add('show');
             setTimeout(() => {
                 document.getElementById('pinVerifyInput').focus();
@@ -1060,10 +1212,34 @@ const firebaseConfig = {
         window.verifyAndDelete = async function() {
             if (!isConfigured || !currentDeleteId) return;
             
-            const enteredPin = document.getElementById('pinVerifyInput').value;
+            const userPin = document.getElementById('pinVerifyInput').value;
+            const adminPin = document.getElementById('adminPinInput').value;
             
-            if (!enteredPin || enteredPin.length !== 4) {
-                showAlert('Please enter a 4-digit PIN');
+            // Check admin PIN first if provided
+            if (adminPin) {
+                if (adminPin === ADMIN_PIN) {
+                    // Admin override - delete directly
+                    try {
+                        await deleteDoc(doc(db, 'reservations', currentDeleteId));
+                        showAlert('Booking force cancelled by admin!', 'success');
+                        closePinModal();
+                        return;
+                    } catch (error) {
+                        console.error('Error deleting:', error);
+                        showAlert('Error cancelling booking. Please try again.');
+                        return;
+                    }
+                } else {
+                    showAlert('Incorrect admin PIN!');
+                    document.getElementById('adminPinInput').value = '';
+                    document.getElementById('adminPinInput').focus();
+                    return;
+                }
+            }
+            
+            // Regular user PIN verification
+            if (!userPin || userPin.length !== 4) {
+                showAlert('Please enter a 4-digit PIN' + (isAdminMode ? ' or admin PIN' : ''));
                 return;
             }
             
@@ -1079,7 +1255,7 @@ const firebaseConfig = {
                 
                 const data = docSnap.data();
                 const storedPinHash = data.pinHash;
-                const enteredPinHash = hashPin(enteredPin);
+                const enteredPinHash = hashPin(userPin);
                 
                 if (storedPinHash === enteredPinHash) {
                     await deleteDoc(docRef);
@@ -1098,6 +1274,12 @@ const firebaseConfig = {
         
         // Allow Enter key in PIN modal
         document.getElementById('pinVerifyInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                verifyAndDelete();
+            }
+        });
+        
+        document.getElementById('adminPinInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 verifyAndDelete();
             }
