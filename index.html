@@ -55,6 +55,7 @@
             }
             to {
                 opacity: 1;
+                transform: translateY(0);
             }
         }
         
@@ -186,6 +187,7 @@
         
         input[type="text"],
         input[type="number"],
+        input[type="password"],
         input[type="datetime-local"] {
             width: 100%;
             padding: 12px 12px 12px 40px;
@@ -198,6 +200,11 @@
             outline: none;
             transition: all 0.3s ease;
             color-scheme: dark;
+        }
+        
+        input[type="password"] {
+            letter-spacing: 0.3em;
+            font-size: 1.2rem;
         }
         
         input:focus {
@@ -517,6 +524,134 @@
             color: #888;
             margin-top: 4px;
         }
+        
+        .pin-info {
+            font-size: 0.8rem;
+            color: #ffa500;
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .pin-info svg {
+            width: 12px;
+            height: 12px;
+        }
+        
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        .modal.show {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: rgba(26, 26, 46, 0.95);
+            border: 1px solid rgba(255, 107, 0, 0.3);
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            animation: slideInFromTop 0.3s ease-out;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        
+        .modal-header h3 {
+            font-family: 'Exo 2', sans-serif;
+            font-size: 1.3rem;
+            color: #ff6b00;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        
+        .modal-close:hover {
+            color: #fff;
+            transform: rotate(90deg);
+        }
+        
+        .modal-body {
+            margin-bottom: 24px;
+        }
+        
+        .modal-body p {
+            color: #aaa;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .modal-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-family: 'Space Mono', monospace;
+            font-weight: 700;
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: all 0.3s ease;
+        }
+        
+        .modal-btn-cancel {
+            background: rgba(150, 150, 150, 0.2);
+            color: #aaa;
+            border: 1px solid rgba(150, 150, 150, 0.3);
+        }
+        
+        .modal-btn-cancel:hover {
+            background: rgba(150, 150, 150, 0.3);
+            color: #fff;
+        }
+        
+        .modal-btn-confirm {
+            background: linear-gradient(135deg, #ff4444 0%, #ff6b6b 100%);
+            color: #fff;
+        }
+        
+        .modal-btn-confirm:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(255, 68, 68, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -608,6 +743,25 @@
                         <div class="time-info">When will the print be done?</div>
                     </div>
                     
+                    <div class="form-group">
+                        <label>Set 4-Digit PIN 🔐</label>
+                        <div class="input-wrapper">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                            </svg>
+                            <input type="password" id="pinInput" placeholder="••••" maxlength="4" pattern="[0-9]{4}" required>
+                        </div>
+                        <div class="pin-info">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 16v-4"/>
+                                <path d="M12 8h.01"/>
+                            </svg>
+                            You'll need this PIN to cancel your booking
+                        </div>
+                    </div>
+                    
                     <button type="submit" class="submit-btn" id="submitBtn">Book Time Slot</button>
                 </form>
             </div>
@@ -632,10 +786,37 @@
         </div>
     </div>
     
+    <!-- PIN Verification Modal -->
+    <div class="modal" id="pinModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🔐 Enter PIN to Cancel</h3>
+                <button class="modal-close" onclick="closePinModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p id="modalBookingInfo"></p>
+                <div class="form-group">
+                    <label>Enter Your 4-Digit PIN</label>
+                    <div class="input-wrapper">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                        <input type="password" id="pinVerifyInput" placeholder="••••" maxlength="4" pattern="[0-9]{4}">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-cancel" onclick="closePinModal()">Cancel</button>
+                <button class="modal-btn modal-btn-confirm" onclick="verifyAndDelete()">Confirm Delete</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
@@ -676,6 +857,18 @@ const firebaseConfig = {
 
         let currentUserType = 'student';
         let allReservations = [];
+        let currentDeleteId = null;
+        
+        // Simple hash function for PIN (basic security)
+        function hashPin(pin) {
+            let hash = 0;
+            for (let i = 0; i < pin.length; i++) {
+                const char = pin.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return hash.toString();
+        }
         
         // Format date/time
         function formatDateTime(date) {
@@ -731,7 +924,6 @@ const firebaseConfig = {
                 const existingStart = new Date(reservation.startTime).getTime();
                 const existingEnd = new Date(reservation.endTime).getTime();
                 
-                // Check if there's any overlap
                 if (
                     (newStartTime >= existingStart && newStartTime < existingEnd) ||
                     (newEndTime > existingStart && newEndTime <= existingEnd) ||
@@ -813,7 +1005,7 @@ const firebaseConfig = {
                                         <div class="duration">Duration: ${duration}</div>
                                     </div>
                                 </div>
-                                <button class="delete-btn" onclick="deleteReservation('${res.id}')" title="Cancel booking">
+                                <button class="delete-btn" onclick="openPinModal('${res.id}', '${res.name}', '${res.partName}')" title="Cancel booking">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="M3 6h18"/>
                                         <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
@@ -846,20 +1038,70 @@ const firebaseConfig = {
             renderQueue([]);
         }
         
-        // Delete reservation
-        window.deleteReservation = async function(id) {
-            if (!isConfigured) return;
+        // Open PIN modal
+        window.openPinModal = function(id, name, partName) {
+            currentDeleteId = id;
+            document.getElementById('modalBookingInfo').textContent = 
+                `Cancel booking for "${partName}" by ${name}?`;
+            document.getElementById('pinVerifyInput').value = '';
+            document.getElementById('pinModal').classList.add('show');
+            setTimeout(() => {
+                document.getElementById('pinVerifyInput').focus();
+            }, 100);
+        };
+        
+        // Close PIN modal
+        window.closePinModal = function() {
+            document.getElementById('pinModal').classList.remove('show');
+            currentDeleteId = null;
+        };
+        
+        // Verify PIN and delete
+        window.verifyAndDelete = async function() {
+            if (!isConfigured || !currentDeleteId) return;
             
-            if (confirm('Are you sure you want to cancel this booking?')) {
-                try {
-                    await deleteDoc(doc(db, 'reservations', id));
-                    showAlert('Booking cancelled successfully!', 'success');
-                } catch (error) {
-                    console.error('Error deleting:', error);
-                    showAlert('Error cancelling booking. Please try again.');
+            const enteredPin = document.getElementById('pinVerifyInput').value;
+            
+            if (!enteredPin || enteredPin.length !== 4) {
+                showAlert('Please enter a 4-digit PIN');
+                return;
+            }
+            
+            try {
+                const docRef = doc(db, 'reservations', currentDeleteId);
+                const docSnap = await getDoc(docRef);
+                
+                if (!docSnap.exists()) {
+                    showAlert('Booking not found');
+                    closePinModal();
+                    return;
                 }
+                
+                const data = docSnap.data();
+                const storedPinHash = data.pinHash;
+                const enteredPinHash = hashPin(enteredPin);
+                
+                if (storedPinHash === enteredPinHash) {
+                    await deleteDoc(docRef);
+                    showAlert('Booking cancelled successfully!', 'success');
+                    closePinModal();
+                } else {
+                    showAlert('Incorrect PIN! Only the booker can cancel.');
+                    document.getElementById('pinVerifyInput').value = '';
+                    document.getElementById('pinVerifyInput').focus();
+                }
+            } catch (error) {
+                console.error('Error verifying PIN:', error);
+                showAlert('Error cancelling booking. Please try again.');
             }
         };
+        
+        // Allow Enter key in PIN modal
+        document.getElementById('pinVerifyInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                verifyAndDelete();
+            }
+        });
         
         // Toggle user type
         document.querySelectorAll('.toggle-btn').forEach(btn => {
@@ -883,8 +1125,14 @@ const firebaseConfig = {
             const partName = document.getElementById('partInput').value;
             const startTime = document.getElementById('startTime').value;
             const endTime = document.getElementById('endTime').value;
+            const pin = document.getElementById('pinInput').value;
             
             // Validation
+            if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+                showAlert('Please enter a valid 4-digit PIN (numbers only)');
+                return;
+            }
+            
             if (!startTime || !endTime) {
                 showAlert('Please select both start and end times.');
                 return;
@@ -922,12 +1170,13 @@ const firebaseConfig = {
                 partName,
                 startTime: startTime,
                 endTime: endTime,
+                pinHash: hashPin(pin),
                 createdAt: new Date().toISOString()
             };
             
             try {
                 await addDoc(collection(db, 'reservations'), newReservation);
-                showAlert('Booking created successfully!', 'success');
+                showAlert('Booking created successfully! Remember your PIN to cancel later.', 'success');
                 this.reset();
             } catch (error) {
                 console.error('Error adding reservation:', error);
