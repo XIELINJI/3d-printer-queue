@@ -92,6 +92,30 @@
             text-transform: uppercase;
         }
         
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255, 107, 0, 0.1);
+            border: 1px solid rgba(255, 107, 0, 0.3);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            margin-top: 12px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4ade80;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .status-dot.disconnected {
+            background: #ff4444;
+        }
+        
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
@@ -239,6 +263,11 @@
             transform: translateY(0);
         }
         
+        .submit-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
         .queue-header {
             display: flex;
             justify-content: space-between;
@@ -255,7 +284,6 @@
             font-size: 0.85rem;
             font-weight: 700;
             color: #ffa500;
-            animation: pulse 2s ease-in-out infinite;
         }
         
         .reservation-card {
@@ -382,6 +410,29 @@
         .empty-state small {
             font-size: 0.9rem;
         }
+        
+        .setup-notice {
+            background: rgba(255, 200, 0, 0.1);
+            border: 1px solid rgba(255, 200, 0, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 32px;
+            color: #ffc800;
+            text-align: center;
+        }
+        
+        .setup-notice h3 {
+            margin-bottom: 12px;
+            font-family: 'Exo 2', sans-serif;
+        }
+        
+        .setup-notice code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.85rem;
+        }
     </style>
 </head>
 <body>
@@ -389,6 +440,17 @@
         <div class="header">
             <h1>3D PRINTER QUEUE</h1>
             <p>Makerspace Reservation System</p>
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Connecting...</span>
+            </div>
+        </div>
+        
+        <!-- Setup Notice (will be hidden after Firebase is configured) -->
+        <div class="setup-notice" id="setupNotice" style="display: none;">
+            <h3>⚠️ Firebase Setup Required</h3>
+            <p>Please configure Firebase to enable shared real-time updates.</p>
+            <p style="font-size: 0.85rem; margin-top: 8px;">See FIREBASE_SETUP.md for instructions</p>
         </div>
         
         <div class="grid">
@@ -442,7 +504,7 @@
                         </div>
                     </div>
                     
-                    <button type="submit" class="submit-btn">Add to Queue</button>
+                    <button type="submit" class="submit-btn" id="submitBtn">Add to Queue</button>
                 </form>
             </div>
             
@@ -466,42 +528,52 @@
         </div>
     </div>
     
-    <script>
-        let reservations = [
-            {
-                id: 1,
-                name: "Alex Chen",
-                userType: "student",
-                partName: "Robot Gripper v2",
-                printTime: 3.5,
-                timestamp: new Date('2025-01-16T09:30:00')
-            },
-            {
-                id: 2,
-                name: "Dr. Sarah Wong",
-                userType: "staff",
-                partName: "Calibration Mount",
-                printTime: 1.2,
-                timestamp: new Date('2025-01-16T10:15:00')
-            }
-        ];
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyBydsr__vOwWNS6tV70d4hp_ydMlmQuPSI",
+  authDomain: "d-printer-queue-322ce.firebaseapp.com",
+  projectId: "d-printer-queue-322ce",
+  storageBucket: "d-printer-queue-322ce.firebasestorage.app",
+  messagingSenderId: "814480140784",
+  appId: "1:814480140784:web:1c85171efa01cbced4d535",
+  measurementId: "G-VLBZZYWR12"
+};
+
+        // Check if Firebase is configured
+        const isConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
         
+        if (!isConfigured) {
+            document.getElementById('setupNotice').style.display = 'block';
+            document.getElementById('statusText').textContent = 'Setup Required';
+            document.getElementById('statusDot').classList.add('disconnected');
+            document.getElementById('submitBtn').disabled = true;
+        }
+
+        // Initialize Firebase
+        let app, db;
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            
+            if (isConfigured) {
+                document.getElementById('statusText').textContent = 'Connected';
+                document.getElementById('statusDot').classList.remove('disconnected');
+            }
+        } catch (error) {
+            console.error('Firebase initialization error:', error);
+            document.getElementById('statusText').textContent = 'Connection Error';
+            document.getElementById('statusDot').classList.add('disconnected');
+        }
+
         let currentUserType = 'student';
         
-        // Load from localStorage
-        const savedData = localStorage.getItem('printerReservations');
-        if (savedData) {
-            reservations = JSON.parse(savedData).map(r => ({
-                ...r,
-                timestamp: new Date(r.timestamp)
-            }));
-        }
-        
-        function saveToStorage() {
-            localStorage.setItem('printerReservations', JSON.stringify(reservations));
-        }
-        
-        function renderQueue() {
+        // Render queue
+        function renderQueue(reservations) {
             const queueList = document.getElementById('queueList');
             const stats = document.getElementById('stats');
             
@@ -535,7 +607,7 @@
                                 ${res.printTime} hours
                             </div>
                         </div>
-                        <button class="delete-btn" onclick="deleteReservation(${res.id})" title="Remove from queue">
+                        <button class="delete-btn" onclick="deleteReservation('${res.id}')" title="Remove from queue">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M3 6h18"/>
                                 <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
@@ -550,11 +622,33 @@
             stats.textContent = `${reservations.length} jobs • ${totalTime.toFixed(1)}h total`;
         }
         
-        function deleteReservation(id) {
-            reservations = reservations.filter(r => r.id !== id);
-            saveToStorage();
-            renderQueue();
+        // Listen to Firebase changes (real-time updates)
+        if (isConfigured) {
+            const q = query(collection(db, 'reservations'), orderBy('timestamp', 'asc'));
+            onSnapshot(q, (snapshot) => {
+                const reservations = [];
+                snapshot.forEach((doc) => {
+                    reservations.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
+                renderQueue(reservations);
+            });
+        } else {
+            renderQueue([]);
         }
+        
+        // Delete reservation
+        window.deleteReservation = async function(id) {
+            if (!isConfigured) return;
+            try {
+                await deleteDoc(doc(db, 'reservations', id));
+            } catch (error) {
+                console.error('Error deleting:', error);
+                alert('Error deleting reservation');
+            }
+        };
         
         // Toggle user type
         document.querySelectorAll('.toggle-btn').forEach(btn => {
@@ -566,15 +660,19 @@
         });
         
         // Form submission
-        document.getElementById('reservationForm').addEventListener('submit', function(e) {
+        document.getElementById('reservationForm').addEventListener('submit', async function(e) {
             e.preventDefault();
+            
+            if (!isConfigured) {
+                alert('Please configure Firebase first. See FIREBASE_SETUP.md');
+                return;
+            }
             
             const name = document.getElementById('nameInput').value;
             const partName = document.getElementById('partInput').value;
             const printTime = parseFloat(document.getElementById('timeInput').value);
             
             const newReservation = {
-                id: Date.now(),
                 name,
                 userType: currentUserType,
                 partName,
@@ -582,16 +680,14 @@
                 timestamp: new Date()
             };
             
-            reservations.push(newReservation);
-            saveToStorage();
-            renderQueue();
-            
-            // Reset form
-            this.reset();
+            try {
+                await addDoc(collection(db, 'reservations'), newReservation);
+                this.reset();
+            } catch (error) {
+                console.error('Error adding reservation:', error);
+                alert('Error adding reservation. Please try again.');
+            }
         });
-        
-        // Initial render
-        renderQueue();
     </script>
 </body>
 </html>
